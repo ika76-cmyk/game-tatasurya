@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Media Pembelajaran - SPACE MISSION</title>
+    <!-- MediaPipe Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <style>
+        :root {
+            --primary: #0b0f19;
+            --accent: #00e5ff;
+            --text: #ffffff;
+            --danger: #ff3366;
+            --success: #00ff66;
+        }
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            background-color: var(--primary);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden; color: var(--text);
+        }
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; display: flex; flex-direction: column;
+        }
+        .screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            background: rgba(11, 15, 25, 0.9); pointer-events: auto; z-index: 10;
+        }
+        .hidden { display: none !important; }
+        
+        /* Navbar */
+        #navbar {
+            display: flex; justify-content: space-between; padding: 15px 30px;
+            background: rgba(0, 0, 0, 0.6); border-bottom: 2px solid var(--accent);
+            font-size: 18px; font-weight: bold; text-shadow: 0 0 5px var(--accent);
+        }
+        
+        /* Question Bar */
+        #question-bar {
+            text-align: center; padding: 20px; font-size: 22px; background: rgba(0, 50, 100, 0.7);
+            border-bottom: 1px solid var(--accent); max-width: 80%; margin: 0 auto;
+            border-radius: 0 0 15px 15px; font-weight: bold; line-height: 1.4;
+        }
+
+        h1 { font-size: 3rem; text-align: center; color: var(--accent); text-shadow: 0 0 15px var(--accent); margin-bottom: 5px; }
+        h2 { font-size: 1.5rem; text-align: center; color: #ffd700; margin-bottom: 30px; }
+        p.subtitle { font-size: 1.2rem; margin-bottom: 30px; text-align: center; }
+        
+        input[type="text"] {
+            padding: 12px 20px; font-size: 1.2rem; border-radius: 25px; border: 2px solid var(--accent);
+            background: rgba(0,0,0,0.5); color: white; text-align: center; margin-bottom: 20px; outline: none;
+            width: 300px; max-width: 80%;
+        }
+        input[type="text"]:focus { box-shadow: 0 0 10px var(--accent); }
+        
+        button {
+            padding: 12px 30px; font-size: 1.2rem; font-weight: bold; border-radius: 25px;
+            border: none; background: var(--accent); color: var(--primary); cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s; margin: 10px;
+        }
+        button:hover { transform: scale(1.05); box-shadow: 0 0 15px var(--accent); }
+        
+        canvas { display: block; width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1; }
+        
+        #video-container {
+            position: absolute; bottom: 20px; right: 20px; width: 160px; height: 120px;
+            border: 2px solid var(--accent); border-radius: 10px; overflow: hidden; z-index: 5;
+            background: #000;
+        }
+        video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+        #cam-status { position: absolute; bottom: 150px; right: 20px; color: var(--accent); font-weight: bold; z-index: 5; background: rgba(0,0,0,0.5); padding: 5px 10px; border-radius: 5px; }
+
+        /* Custom Message Box */
+        #msg-overlay {
+            position: absolute; top:0; left:0; width:100%; height:100%;
+            background: rgba(0,0,0,0.7); z-index: 999; display: flex;
+            justify-content: center; align-items: center; pointer-events: auto;
+        }
+        #msg-box {
+            background: var(--primary); border: 2px solid var(--accent);
+            padding: 30px; border-radius: 15px; text-align: center;
+            box-shadow: 0 0 20px var(--accent); max-width: 400px;
+        }
+        #msg-text { font-size: 1.2rem; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+
+    <!-- Game Canvas -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Camera Feed (Sensor) -->
+    <div id="video-container" class="hidden">
+        <video id="input_video" autoplay playsinline></video>
+    </div>
+    <div id="cam-status" class="hidden">Kamera Off</div>
+
+    <!-- UI Overlay -->
+    <div id="ui-layer">
+        
+        <!-- Navbar -->
+        <div id="navbar" class="hidden">
+            <div id="nav-name">Astronot: -</div>
+            <div id="nav-mission">Misi: 1/5</div>
+            <div id="nav-score">Skor: 0</div>
+            <div id="nav-lives">Nyawa: ❤️❤️❤️</div>
+        </div>
+
+        <!-- Question Area -->
+        <div id="question-bar" class="hidden">Memuat Sistem...</div>
+
+        <!-- Start Screen -->
+        <div id="start-screen" class="screen">
+            <h1>SPACE MISSION</h1>
+            <h2 id="media-title">MATA PELAJARAN - MATERI</h2>
+            <p class="subtitle">Misi Penyelamatan Galaksi</p>
+            <input type="text" id="student-name" placeholder="Masukkan Nama Kamu..." autocomplete="off">
+            <div>
+                <button id="btn-cam">Aktifkan Sensor Tangan</button>
+                <button id="btn-start">Mulai Misi</button>
+            </div>
+            <p style="margin-top:20px; font-size: 0.9rem; color: #ccc; max-width: 600px; text-align: center;">
+                <b>CARA BERMAIN:</b> Jawab pertanyaan dengan menabrakkan pesawat ke asteroid yang benar.<br>
+                Gunakan telapak tangan ke kamera, atau gunakan Mouse / Tombol Panah Keyboard.
+            </p>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="game-over-screen" class="screen hidden">
+            <h1 style="color: var(--danger); text-shadow: 0 0 15px var(--danger);">MISI GAGAL</h1>
+            <p id="go-msg" class="subtitle">Pesawat rusak terkena asteroid yang salah.</p>
+            <button onclick="location.reload()">Coba Lagi</button>
+        </div>
+
+        <!-- Win Screen -->
+        <div id="win-screen" class="screen hidden">
+            <h1 style="color: var(--success); text-shadow: 0 0 15px var(--success);">MISI SELESAI!</h1>
+            <p id="win-msg" class="subtitle"></p>
+            <button onclick="location.reload()">Main Kembali</button>
+        </div>
+
+    </div>
+
+    <!-- Custom Message Box -->
+    <div id="msg-overlay" class="hidden">
+        <div id="msg-box">
+            <div id="msg-text">Pesan di sini</div>
+            <button onclick="closeMessage()">OK Mengerti</button>
+        </div>
+    </div>
+
+    <script>
+        // ==============================================================================
+        // 🛠️ AREA KONFIGURASI GURU - GANTI MATA PELAJARAN DAN SOAL DI SINI 
+        // ==============================================================================
+        const INFO_MEDIA = {
+            mataPelajaran: "IPA",
+            materi: "Tata Surya",
+            kelas: "Kelas 6"
+        };
+
+        const MISSIONS = [
+            {
+                mission: 1, name: "Mengenal Tata Surya",
+                questions: [
+                    { type: "LOTS", q: "Pusat tata surya kita adalah...", ans: "Matahari", choices: ["Matahari", "Bumi", "Bulan"] },
+                    { type: "MOTS", q: "Planet terdekat dengan matahari memiliki suhu yang...", ans: "Sangat Panas", choices: ["Sangat Dingin", "Sangat Panas", "Membeku"] },
+                    { type: "HOTS", q: "Apa yang membuat planet tetap pada orbitnya?", ans: "Gravitasi Matahari", choices: ["Angin Surya", "Gaya Magnet", "Gravitasi Matahari"] }
+                ]
+            },
+            {
+                mission: 2, name: "Planet Dalam",
+                questions: [
+                    { type: "LOTS", q: "Planet terkecil di tata surya adalah...", ans: "Merkurius", choices: ["Mars", "Merkurius", "Venus"] },
+                    { type: "MOTS", q: "Bintang Fajar (Venus) terlihat dari Bumi pada waktu...", ans: "Pagi/Senja", choices: ["Tengah Malam", "Siang Hari", "Pagi/Senja"] },
+                    { type: "HOTS", q: "Mengapa Venus sangat panas walau bukan yang terdekat?", ans: "Atmosfer Tebal", choices: ["Atmosfer Tebal", "Inti Panas", "Permukaan Es"] }
+                ]
+            },
+            {
+                mission: 3, name: "Bumi dan Bulan",
+                questions: [
+                    { type: "LOTS", q: "Satelit alami Bumi adalah...", ans: "Bulan", choices: ["Bulan", "Titan", "Phobos"] },
+                    { type: "MOTS", q: "Posisi Matahari - Bumi - Bulan lurus menyebabkan...", ans: "Gerhana Bulan", choices: ["Gerhana Matahari", "Gerhana Bulan", "Hujan Meteor"] },
+                    { type: "HOTS", q: "Jika Bumi tidak miring pada sumbunya, akibatnya...", ans: "Tidak Ada Musim", choices: ["Tidak Ada Musim", "Gravitasi Hilang", "Bulan Menjauh"] }
+                ]
+            },
+            {
+                mission: 4, name: "Planet Luar",
+                questions: [
+                    { type: "LOTS", q: "Planet terbesar dalam tata surya kita adalah...", ans: "Jupiter", choices: ["Saturnus", "Jupiter", "Neptunus"] },
+                    { type: "MOTS", q: "Cincin Saturnus sebagian besar terbentuk dari...", ans: "Es dan Batu", choices: ["Debu Kosmik", "Es dan Batu", "Gas Beracun"] },
+                    { type: "HOTS", q: "Mengapa satelit Europa (Jupiter) menarik untuk diteliti?", ans: "Lautan di Bawah Es", choices: ["Ada Oksigen", "Lautan di Bawah Es", "Suhu Mirip Bumi"] }
+                ]
+            },
+            {
+                mission: 5, name: "Benda Langit Lainnya",
+                questions: [
+                    { type: "LOTS", q: "Benda langit yang sering disebut 'bintang berekor' adalah...", ans: "Komet", choices: ["Meteor", "Asteroid", "Komet"] },
+                    { type: "MOTS", q: "Batu luar angkasa yang terbakar saat masuk atmosfer Bumi...", ans: "Meteor", choices: ["Komet", "Meteor", "Planet Kerdil"] },
+                    { type: "HOTS", q: "Langkah mitigasi jika asteroid besar menuju Bumi adalah...", ans: "Ubah Lintasannya", choices: ["Ubah Lintasannya", "Pindah ke Mars", "Kubah Pelindung"] }
+                ]
+            }
+        ];
+        // ==============================================================================
+        // AKHIR AREA KONFIGURASI GURU
+        // ==============================================================================
+
+
+        // --- ENGINE GAME ---
+        document.getElementById("media-title").innerText = `${INFO_MEDIA.mataPelajaran} - ${INFO_MEDIA.materi} (${INFO_MEDIA.kelas})`;
+
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        
+        let gameState = "START"; 
+        let studentName = "";
+        let score = 0;
+        let lives = 3;
+        let currentMissionIndex = 0;
+        let currentQuestionIndex = 0;
+        
+        let player = { x: 0, y: 0, targetX: 0, targetY: 0, speed: 0.1 };
+        let asteroids = [];
+        let stars = [];
+        
+        const uiNavbar = document.getElementById("navbar");
+        const uiQuestion = document.getElementById("question-bar");
+        const navName = document.getElementById("nav-name");
+        const navScore = document.getElementById("nav-score");
+        const navLives = document.getElementById("nav-lives");
+        const navMission = document.getElementById("nav-mission");
+
+        // Custom Message System
+        function showMessage(msg) {
+            document.getElementById("msg-text").innerText = msg;
+            document.getElementById("msg-overlay").classList.remove("hidden");
+        }
+        function closeMessage() {
+            document.getElementById("msg-overlay").classList.add("hidden");
+        }
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            if (gameState === "START") {
+                player.x = canvas.width / 2;
+                player.y = canvas.height - 100;
+                player.targetX = player.x;
+                player.targetY = player.y;
+            }
+        }
+        window.addEventListener("resize", resize);
+        resize();
+
+        // Starfield background
+        for (let i = 0; i < 150; i++) {
+            stars.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                size: Math.random() * 2 + 1,
+                speed: Math.random() * 3 + 1
+            });
+        }
+
+        // Controls
+        window.addEventListener("mousemove", (e) => {
+            if(gameState === "PLAYING") {
+                player.targetX = e.clientX;
+                player.targetY = e.clientY;
+            }
+        });
+
+        const keys = {};
+        window.addEventListener("keydown", e => keys[e.key] = true);
+        window.addEventListener("keyup", e => keys[e.key] = false);
+
+        // Kamera Setup
+        const videoElement = document.getElementById('input_video');
+        const btnCam = document.getElementById('btn-cam');
+        const camStatus = document.getElementById('cam-status');
+        let cameraActive = false;
+
+        const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
+        
+        hands.onResults((results) => {
+            if (gameState === "PLAYING" && results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const landmarks = results.multiHandLandmarks[0];
+                const indexFinger = landmarks[9]; 
+                player.targetX = (1 - indexFinger.x) * canvas.width;
+                player.targetY = indexFinger.y * canvas.height;
+            }
+        });
+
+        btnCam.addEventListener('click', async () => {
+            if(!cameraActive) {
+                try {
+                    const camera = new Camera(videoElement, {
+                        onFrame: async () => { await hands.send({image: videoElement}); },
+                        width: 640, height: 480
+                    });
+                    camera.start();
+                    cameraActive = true;
+                    btnCam.innerText = "Sensor Kamera Aktif ✅";
+                    btnCam.style.background = "var(--success)";
+                    btnCam.style.color = "#000";
+                    document.getElementById("video-container").classList.remove("hidden");
+                    camStatus.classList.remove("hidden");
+                    camStatus.innerText = "Sensor Gerak Aktif";
+                } catch (e) {
+                    showMessage("Kamera tidak terdeteksi atau diblokir. Izinkan akses kamera di pengaturan browser.");
+                }
+            }
+        });
+
+        // Game Flow
+        document.getElementById("btn-start").addEventListener("click", () => {
+            const inputName = document.getElementById("student-name").value.trim();
+            if(!inputName) { 
+                showMessage("Peringatan: Tolong masukkan nama kamu terlebih dahulu, Astronot!"); 
+                return; 
+            }
+            studentName = inputName;
+            
+            document.getElementById("start-screen").classList.add("hidden");
+            uiNavbar.classList.remove("hidden");
+            uiQuestion.classList.remove("hidden");
+            
+            navName.innerText = `Astronot: ${studentName}`;
+            gameState = "PLAYING";
+            loadQuestion();
+            requestAnimationFrame(gameLoop);
+        });
+
+        function loadQuestion() {
+            if (currentMissionIndex >= MISSIONS.length) { winGame(); return; }
+            const mission = MISSIONS[currentMissionIndex];
+            if (currentQuestionIndex >= mission.questions.length) {
+                currentMissionIndex++;
+                currentQuestionIndex = 0;
+                loadQuestion();
+                return;
+            }
+
+            const qData = mission.questions[currentQuestionIndex];
+            navMission.innerText = `Misi: ${currentMissionIndex + 1}/5 (${qData.type})`;
+            uiQuestion.innerText = qData.q;
+            spawnAsteroids(qData.choices, qData.ans);
+        }
+
+        function spawnAsteroids(choices, correctAnswer) {
+            asteroids = [];
+            const spacing = canvas.width / (choices.length + 1);
+            const shuffledChoices = [...choices].sort(() => Math.random() - 0.5);
+
+            for(let i = 0; i < shuffledChoices.length; i++) {
+                asteroids.push({
+                    x: spacing * (i + 1),
+                    y: -100 - (Math.random() * 200),
+                    radius: 50,
+                    text: shuffledChoices[i],
+                    isCorrect: shuffledChoices[i] === correctAnswer,
+                    speed: 1.5 + (currentMissionIndex * 0.4) // Kecepatan pelan di awal, naik bertahap
+                });
+            }
+        }
+
+        function updateUI() {
+            navScore.innerText = `Skor: ${score}`;
+            let hearts = "";
+            for(let i=0; i<lives; i++) hearts += "❤️";
+            navLives.innerText = `Nyawa: ${hearts}`;
+        }
+
+        function takeDamage() {
+            lives--;
+            updateUI();
+            
+            document.body.style.backgroundColor = "var(--danger)";
+            setTimeout(() => document.body.style.backgroundColor = "var(--primary)", 100);
+
+            if(lives <= 0) {
+                gameState = "GAMEOVER";
+                document.getElementById("game-over-screen").classList.remove("hidden");
+                uiNavbar.classList.add("hidden");
+                uiQuestion.classList.add("hidden");
+            }
+        }
+
+        function winGame() {
+            gameState = "WIN";
+            const winScreen = document.getElementById("win-screen");
+            const winMsg = document.getElementById("win-msg");
+            winMsg.innerHTML = `Luar Biasa, <b>${studentName}</b>!<br>Kamu telah menyelesaikan semua misi galaksi (${INFO_MEDIA.materi})<br><br>Skor Akhir: ${score}`;
+            winScreen.classList.remove("hidden");
+            uiNavbar.classList.add("hidden");
+            uiQuestion.classList.add("hidden");
+        }
+
+        function drawShip(x, y) {
+            ctx.save();
+            ctx.translate(x, y);
+            
+            // Api roket
+            ctx.fillStyle = (Math.random() > 0.5) ? "#ff4500" : "#ffd700";
+            ctx.beginPath();
+            ctx.moveTo(-12, 25);
+            ctx.lineTo(12, 25);
+            ctx.lineTo(0, 45 + Math.random() * 15);
+            ctx.fill();
+
+            // Badan
+            ctx.fillStyle = "#e0e0e0";
+            ctx.beginPath();
+            ctx.moveTo(0, -35); 
+            ctx.lineTo(25, 25); 
+            ctx.lineTo(-25, 25); 
+            ctx.fill();
+
+            // Kaca
+            ctx.fillStyle = "var(--accent)";
+            ctx.beginPath();
+            ctx.arc(0, 0, 10, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        function gameLoop() {
+            if (gameState !== "PLAYING") return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Background
+            ctx.fillStyle = "#ffffff";
+            stars.forEach(star => {
+                ctx.beginPath();
+                ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+                ctx.fill();
+                star.y += star.speed;
+                if (star.y > canvas.height) {
+                    star.y = 0;
+                    star.x = Math.random() * canvas.width;
+                }
+            });
+
+            // Input Keyboard Alternatif
+            if(keys["ArrowLeft"]) player.targetX -= 12;
+            if(keys["ArrowRight"]) player.targetX += 12;
+            if(keys["ArrowUp"]) player.targetY -= 12;
+            if(keys["ArrowDown"]) player.targetY += 12;
+
+            player.targetX = Math.max(30, Math.min(canvas.width - 30, player.targetX));
+            player.targetY = Math.max(80, Math.min(canvas.height - 30, player.targetY));
+
+            player.x += (player.targetX - player.x) * player.speed;
+            player.y += (player.targetY - player.y) * player.speed;
+
+            drawShip(player.x, player.y);
+
+            // Render Asteroid
+            asteroids.forEach(ast => {
+                ctx.fillStyle = "#555";
+                ctx.beginPath();
+                ctx.arc(ast.x, ast.y, ast.radius, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.fillStyle = "#444";
+                ctx.beginPath(); ctx.arc(ast.x - 15, ast.y - 15, 10, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(ast.x + 15, ast.y + 15, 14, 0, Math.PI*2); ctx.fill();
+
+                ctx.fillStyle = "#fff";
+                ctx.font = "bold 13px sans-serif";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                
+                const words = ast.text.split(" ");
+                if(words.length > 2) {
+                    ctx.fillText(words.slice(0,2).join(" "), ast.x, ast.y - 8);
+                    ctx.fillText(words.slice(2).join(" "), ast.x, ast.y + 8);
+                } else {
+                    ctx.fillText(ast.text, ast.x, ast.y);
+                }
+
+                ast.y += ast.speed;
+
+                if (ast.y > canvas.height + 50) {
+                    ast.y = -50 - Math.random() * 100;
+                }
+
+                // Tabrakan
+                let dx = player.x - ast.x;
+                let dy = player.y - ast.y;
+                let distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance < ast.radius + 20) { 
+                    if (ast.isCorrect) {
+                        score += 100;
+                        updateUI();
+                        
+                        document.body.style.backgroundColor = "var(--success)";
+                        setTimeout(() => document.body.style.backgroundColor = "var(--primary)", 100);
+
+                        currentQuestionIndex++;
+                        loadQuestion();
+                    } else {
+                        takeDamage();
+                        ast.y = canvas.height + 100; 
+                    }
+                }
+            });
+
+            requestAnimationFrame(gameLoop);
+        }
+    </script>
+</body>
+</html>
